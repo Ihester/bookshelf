@@ -186,25 +186,87 @@ function sourceLabel(s) {
   return "自有";
 }
 
+/* ---------- Volume-aware sort helpers ---------- */
+const CN_NUM = { 〇:0, 零:0, 一:1, 二:2, 三:3, 四:4, 五:5, 六:6, 七:7, 八:8, 九:9, 十:10, 百:100, 千:1000, 兩:2 };
+
+function chineseNumeralToInt(s) {
+  if (!s) return 0;
+  if (s.length === 1) return CN_NUM[s] ?? 0;
+  let total = 0;
+  let current = 0;
+  for (const ch of s) {
+    const v = CN_NUM[ch];
+    if (v == null) return 0;
+    if (v >= 10) { total += (current || 1) * v; current = 0; }
+    else { current = v; }
+  }
+  return total + current;
+}
+
+function extractVolumeNumber(title, base) {
+  if (!title) return 0;
+  const rest = title.slice((base || "").length).trim();
+  if (!rest) return 0;
+  // 阿拉伯數字
+  const m = rest.match(/\d+/);
+  if (m) return parseInt(m[0], 10);
+  // 全形數字
+  const fw = rest.match(/[\uFF10-\uFF19]+/);
+  if (fw) {
+    const n = fw[0].replace(/[\uFF10-\uFF19]/g, (c) =>
+      String.fromCharCode(c.charCodeAt(0) - 0xFF10 + 0x30));
+    return parseInt(n, 10);
+  }
+  // 中文數字
+  const cn = rest.match(/[〇零一二三四五六七八九十百千兩]+/);
+  if (cn) return chineseNumeralToInt(cn[0]);
+  // 上中下 / 前後
+  if (/前|上/.test(rest)) return 1;
+  if (/中/.test(rest)) return 2;
+  if (/後|下/.test(rest)) return 3;
+  return 0;
+}
+
+const cmpStr = (a, b) =>
+  (a || "").localeCompare(b || "", "zh-Hant", { numeric: true });
+
+function compareByTitleWithVolume(a, b) {
+  const baseA = stripVolume(a.title) || a.title;
+  const baseB = stripVolume(b.title) || b.title;
+  const baseCmp = cmpStr(baseA, baseB);
+  if (baseCmp !== 0) return baseCmp;
+  // 同系列 → 用解析出的集數做數值比較
+  const volA = extractVolumeNumber(a.title, baseA);
+  const volB = extractVolumeNumber(b.title, baseB);
+  if (volA !== volB) return volA - volB;
+  return cmpStr(a.title, b.title);
+}
+
 function sortBooks(books, sortBy) {
   const arr = [...books];
-  const cmpStr = (a, b) =>
-    (a || "").localeCompare(b || "", "zh-Hant", { numeric: true });
   switch (sortBy) {
     case "addedAt-asc":
       return arr.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
     case "title-asc":
-      return arr.sort((a, b) => cmpStr(a.title, b.title));
+      return arr.sort(compareByTitleWithVolume);
     case "title-desc":
-      return arr.sort((a, b) => cmpStr(b.title, a.title));
+      return arr.sort((a, b) => -compareByTitleWithVolume(a, b));
     case "author-asc":
-      return arr.sort((a, b) => cmpStr(a.author, b.author));
+      return arr.sort((a, b) => {
+        const c = cmpStr(a.author, b.author);
+        return c !== 0 ? c : compareByTitleWithVolume(a, b);
+      });
     case "author-desc":
-      return arr.sort((a, b) => cmpStr(b.author, a.author));
+      return arr.sort((a, b) => {
+        const c = cmpStr(b.author, a.author);
+        return c !== 0 ? c : compareByTitleWithVolume(a, b);
+      });
     case "publishedDate-asc":
-      return arr.sort((a, b) => (a.publishedDate || "").localeCompare(b.publishedDate || ""));
+      return arr.sort((a, b) => (a.publishedDate || "").localeCompare(b.publishedDate || "")
+        || compareByTitleWithVolume(a, b));
     case "publishedDate-desc":
-      return arr.sort((a, b) => (b.publishedDate || "").localeCompare(a.publishedDate || ""));
+      return arr.sort((a, b) => (b.publishedDate || "").localeCompare(a.publishedDate || "")
+        || compareByTitleWithVolume(a, b));
     case "status-unread":
       return arr.sort((a, b) => {
         if (a.status !== b.status) return a.status === "unread" ? -1 : 1;
