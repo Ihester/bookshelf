@@ -44,7 +44,28 @@
     <input type="search" id="filter-search" placeholder="搜尋書名 / 作者 / 標籤" aria-label="搜尋" />
   </section>
 
-  <main id="book-list" class="book-list"></main>
+  <section class="toolbar">
+    <select id="sort-by" aria-label="排序">
+      <option value="addedAt-desc">↓ 最近加入</option>
+      <option value="addedAt-asc">↑ 最早加入</option>
+      <option value="title-asc">書名 A→Z</option>
+      <option value="title-desc">書名 Z→A</option>
+      <option value="author-asc">作者 A→Z</option>
+      <option value="publishedDate-desc">出版日期 新→舊</option>
+      <option value="publishedDate-asc">出版日期 舊→新</option>
+      <option value="status-unread">未讀優先</option>
+      <option value="status-read">已讀優先</option>
+    </select>
+    <select id="layout" aria-label="排版">
+      <option value="list">📋 列表</option>
+      <option value="grid-2">▦ 2 本/排</option>
+      <option value="grid-3">▦ 3 本/排</option>
+      <option value="grid-4">▦ 4 本/排</option>
+      <option value="grid-5">▦ 5 本/排</option>
+    </select>
+  </section>
+
+  <main id="book-list" class="book-list layout-list"></main>
 
   <p id="empty-hint" class="empty-hint hidden">
     還沒有任何書籍。點右下角的 <strong>＋</strong> 開始登錄第一本書！

@@ -2,6 +2,7 @@
 
 const STORAGE_KEY = "myBookshelf.books.v1";
 const TAGS_KEY = "myBookshelf.tags.v1";
+const SETTINGS_KEY = "myBookshelf.settings.v1";
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -9,6 +10,7 @@ const $$ = (sel) => document.querySelectorAll(sel);
 const state = {
   books: [],
   tags: [],
+  settings: { layout: "list", sortBy: "addedAt-desc" },
   filter: { status: "all", type: "all", source: "all", tag: "all", search: "" },
   pendingBook: null,
   editingId: null,
@@ -19,6 +21,7 @@ const state = {
 
 state.books = loadBooks();
 state.tags = loadTags();
+state.settings = loadSettings();
 
 /* ---------- Storage ---------- */
 function loadBooks() {
@@ -39,6 +42,18 @@ function loadTags() {
 }
 function saveTags() {
   localStorage.setItem(TAGS_KEY, JSON.stringify(state.tags));
+}
+function loadSettings() {
+  const defaults = { layout: "list", sortBy: "addedAt-desc" };
+  try {
+    const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+    return Object.assign(defaults, stored || {});
+  } catch {
+    return defaults;
+  }
+}
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
 }
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -171,6 +186,41 @@ function sourceLabel(s) {
   return "自有";
 }
 
+function sortBooks(books, sortBy) {
+  const arr = [...books];
+  const cmpStr = (a, b) =>
+    (a || "").localeCompare(b || "", "zh-Hant", { numeric: true });
+  switch (sortBy) {
+    case "addedAt-asc":
+      return arr.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
+    case "title-asc":
+      return arr.sort((a, b) => cmpStr(a.title, b.title));
+    case "title-desc":
+      return arr.sort((a, b) => cmpStr(b.title, a.title));
+    case "author-asc":
+      return arr.sort((a, b) => cmpStr(a.author, b.author));
+    case "author-desc":
+      return arr.sort((a, b) => cmpStr(b.author, a.author));
+    case "publishedDate-asc":
+      return arr.sort((a, b) => (a.publishedDate || "").localeCompare(b.publishedDate || ""));
+    case "publishedDate-desc":
+      return arr.sort((a, b) => (b.publishedDate || "").localeCompare(a.publishedDate || ""));
+    case "status-unread":
+      return arr.sort((a, b) => {
+        if (a.status !== b.status) return a.status === "unread" ? -1 : 1;
+        return (b.addedAt || 0) - (a.addedAt || 0);
+      });
+    case "status-read":
+      return arr.sort((a, b) => {
+        if (a.status !== b.status) return a.status === "read" ? -1 : 1;
+        return (b.addedAt || 0) - (a.addedAt || 0);
+      });
+    case "addedAt-desc":
+    default:
+      return arr.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+  }
+}
+
 function applyFilters(books) {
   const { status, type, source, tag, search } = state.filter;
   const q = search.trim().toLowerCase();
@@ -199,9 +249,9 @@ function render() {
   refreshTagFilter();
   const list = $("#book-list");
   const empty = $("#empty-hint");
-  const filtered = applyFilters(state.books)
-    .sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+  const filtered = sortBooks(applyFilters(state.books), state.settings.sortBy);
 
+  list.className = `book-list layout-${state.settings.layout}`;
   list.innerHTML = filtered.map(bookCardHtml).join("");
 
   if (state.books.length === 0) {
@@ -881,6 +931,19 @@ function wireEvents() {
   $("#filter-source").addEventListener("change", (e) => { state.filter.source = e.target.value; render(); });
   $("#filter-tag").addEventListener("change", (e) => { state.filter.tag = e.target.value; render(); });
   $("#filter-search").addEventListener("input", (e) => { state.filter.search = e.target.value; render(); });
+
+  $("#sort-by").value = state.settings.sortBy;
+  $("#sort-by").addEventListener("change", (e) => {
+    state.settings.sortBy = e.target.value;
+    saveSettings();
+    render();
+  });
+  $("#layout").value = state.settings.layout;
+  $("#layout").addEventListener("change", (e) => {
+    state.settings.layout = e.target.value;
+    saveSettings();
+    render();
+  });
 
   $("#add-btn").addEventListener("click", openAddDialog);
   $("#close-add").addEventListener("click", closeAddDialog);

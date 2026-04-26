@@ -99,13 +99,91 @@ body {
   color: var(--text);
 }
 
-/* Book list */
+/* Toolbar (sort + layout) */
+.toolbar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 0 14px 10px;
+}
+.toolbar select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+/* Book list (default = list layout) */
 .book-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 10px;
   padding: 0 14px;
 }
+
+/* Grid layouts: N books per row, vertical card */
+.book-list.layout-grid-2 { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.book-list.layout-grid-3 { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.book-list.layout-grid-4 { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.book-list.layout-grid-5 { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+
+.book-list[class*="layout-grid"] .book-card {
+  flex-direction: column;
+  padding: 8px;
+  gap: 6px;
+}
+.book-list[class*="layout-grid"] .book-card .cover {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 3;
+}
+.book-list[class*="layout-grid"] .book-card .meta {
+  width: 100%;
+}
+.book-list[class*="layout-grid"] .book-card .title {
+  font-size: 0.82rem;
+  line-height: 1.25;
+  -webkit-line-clamp: 2;
+  margin: 0;
+}
+.book-list[class*="layout-grid"] .book-card .author {
+  font-size: 0.72rem;
+  margin-bottom: 4px;
+}
+.book-list[class*="layout-grid"] .book-card .badges {
+  gap: 3px;
+}
+.book-list[class*="layout-grid"] .book-card .badge {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+}
+/* Hide ISBN badge in grid mode (too long) */
+.book-list[class*="layout-grid"] .book-card .badge:nth-child(n+4) {
+  display: none;
+}
+
+/* Compact: 3 cols hide author */
+.book-list.layout-grid-3 .book-card { padding: 6px; }
+.book-list.layout-grid-3 .book-card .author { display: none; }
+.book-list.layout-grid-3 .book-card .title { font-size: 0.78rem; }
+
+/* Very compact: 4-5 cols hide author + most badges */
+.book-list.layout-grid-4 .book-card,
+.book-list.layout-grid-5 .book-card {
+  padding: 4px;
+  gap: 4px;
+}
+.book-list.layout-grid-4 .book-card .author,
+.book-list.layout-grid-5 .book-card .author,
+.book-list.layout-grid-4 .book-card .badges,
+.book-list.layout-grid-5 .book-card .badges {
+  display: none;
+}
+.book-list.layout-grid-4 .book-card .title { font-size: 0.72rem; }
+.book-list.layout-grid-5 .book-card .title { font-size: 0.66rem; -webkit-line-clamp: 2; }
 .book-card {
   background: var(--surface);
   border-radius: var(--radius);
