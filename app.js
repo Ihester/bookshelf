@@ -9,9 +9,11 @@ const $$ = (sel) => document.querySelectorAll(sel);
 const state = {
   books: [],
   tags: [],
-  filter: { status: "all", type: "all", tag: "all", search: "" },
+  filter: { status: "all", type: "all", source: "all", tag: "all", search: "" },
   pendingBook: null,
   editingId: null,
+  selectedSearch: new Map(), // key -> book
+  searchGroups: [],
   scanner: { stream: null, running: false, detector: null, rafId: null }
 };
 
@@ -59,7 +61,6 @@ function escapeHtml(s) {
 /* ---------- OpenCC: Simplified -> Taiwan Traditional ---------- */
 let openccConverter = null;
 let openccLoading = null;
-
 function ensureOpenCC() {
   if (openccConverter) return Promise.resolve(openccConverter);
   if (openccLoading) return openccLoading;
@@ -69,9 +70,7 @@ function ensureOpenCC() {
       if (typeof window.OpenCC !== "undefined") {
         try {
           openccConverter = window.OpenCC.Converter({ from: "cn", to: "tw" });
-        } catch {
-          openccConverter = null;
-        }
+        } catch { openccConverter = null; }
         return resolve(openccConverter);
       }
       if (Date.now() - start > 8000) return resolve(null);
@@ -81,7 +80,6 @@ function ensureOpenCC() {
   });
   return openccLoading;
 }
-
 function s2t(text) {
   if (!text || !openccConverter) return text || "";
   try { return openccConverter(text); } catch { return text; }
@@ -95,7 +93,6 @@ function improveCoverUrl(url) {
   u = u.replace(/&edge=curl/, "");
   return u;
 }
-
 function coverHtml(src) {
   if (!src) return `<div class="cover"></div>`;
   return `<div class="cover"><img src="${escapeHtml(src)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.dataset.failed=1" /></div>`;
@@ -104,7 +101,7 @@ function coverHtml(src) {
 /* ---------- Google Books ---------- */
 async function googleBooksSearch(query) {
   await ensureOpenCC();
-  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=20&country=TW`;
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=40&country=TW`;
   const r = await fetch(url);
   if (!r.ok) throw new Error("查詢失敗");
   const data = await r.json();
@@ -134,23 +131,61 @@ function toBookData(item) {
   };
 }
 
+/* ---------- Series grouping ---------- */
+function stripVolume(title) {
+  let t = (title || "").trim();
+  t = t.replace(/\s*[\(（]\s*\d+\s*[\)）]\s*$/, "");
+  t = t.replace(/\s*vol(ume)?\.?\s*\d+\s*$/i, "");
+  t = t.replace(/\s*第\s*[\d一二三四五六七八九十百千]+\s*[集卷冊回部章]\s*$/, "");
+  t = t.replace(/\s*[\d一二三四五六七八九十百千]+\s*[集卷冊回部章]\s*$/, "");
+  t = t.replace(/\s+(上|下|中|前|後)\s*[集卷冊]?\s*$/, "");
+  t = t.replace(/[\s\-:：]+\d+\s*$/, "");
+  return t.trim();
+}
+function groupSeries(items) {
+  const map = new Map();
+  const groups = [];
+  for (const it of items) {
+    const base = stripVolume(it.title) || it.title;
+    const key = `${base}|${it.author}`;
+    if (map.has(key)) {
+      map.get(key).volumes.push(it);
+    } else {
+      const g = { id: key, baseTitle: base, author: it.author, volumes: [it] };
+      map.set(key, g);
+      groups.push(g);
+    }
+  }
+  return groups;
+}
+function bookKey(b) {
+  return b.isbn ? `isbn:${b.isbn}` : `t:${b.title}|a:${b.author || ""}`;
+}
+
 /* ---------- Render ---------- */
 function statusLabel(s) { return s === "read" ? "已讀" : "未讀"; }
 function typeLabel(t) { return t === "ebook" ? "電子書" : "實體書"; }
+function sourceLabel(s) {
+  if (s === "library") return "圖書館";
+  if (s === "borrowed") return "借閱";
+  return "自有";
+}
 
 function applyFilters(books) {
-  const { status, type, tag, search } = state.filter;
+  const { status, type, source, tag, search } = state.filter;
   const q = search.trim().toLowerCase();
   return books.filter((b) => {
     if (status !== "all" && b.status !== status) return false;
     if (type !== "all" && b.type !== type) return false;
+    if (source !== "all") {
+      const s = b.source || "owned";
+      if (s !== source) return false;
+    }
     if (tag !== "all") {
       const tags = b.tags || [];
       if (tag === "__none__") {
         if (tags.length) return false;
-      } else if (!tags.includes(tag)) {
-        return false;
-      }
+      } else if (!tags.includes(tag)) return false;
     }
     if (q) {
       const hay = `${b.title} ${b.author} ${b.isbn} ${(b.tags||[]).join(" ")}`.toLowerCase();
@@ -209,6 +244,9 @@ function bookCardHtml(b) {
   const tagBadges = (b.tags || [])
     .map((t) => `<span class="badge tag">${escapeHtml(t)}</span>`)
     .join("");
+  const src = b.source || "owned";
+  const sourceBadge = src !== "owned"
+    ? `<span class="badge source-${src}">${sourceLabel(src)}</span>` : "";
   return `
     <article class="book-card" data-id="${b.id}">
       ${coverHtml(b.cover)}
@@ -218,6 +256,7 @@ function bookCardHtml(b) {
         <div class="badges">
           <span class="badge ${b.status}">${statusLabel(b.status)}</span>
           <span class="badge ${b.type}">${typeLabel(b.type)}</span>
+          ${sourceBadge}
           ${tagBadges}
           ${b.isbn ? `<span class="badge">ISBN ${escapeHtml(b.isbn)}</span>` : ""}
         </div>
@@ -256,7 +295,6 @@ function renderTagPicker(containerSel, selected) {
   });
   c.appendChild(add);
 }
-
 function getSelectedTags(containerSel) {
   return [...$(containerSel).querySelectorAll(".tag-chip.selected")]
     .map((b) => b.dataset.tag);
@@ -267,39 +305,194 @@ function openAddDialog() {
   $("#search-results").innerHTML = "";
   $("#search-input").value = "";
   $("#manual-isbn").value = "";
+  state.selectedSearch.clear();
+  state.searchGroups = [];
+  updateMultiAddBar();
   switchTab("scan");
   $("#add-dialog").showModal();
 }
 function closeAddDialog() {
   stopScanner();
+  state.selectedSearch.clear();
+  updateMultiAddBar();
   $("#add-dialog").close();
 }
 function switchTab(name) {
   $$(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   $$(".tab-panel").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== name));
+  if (name === "scan") {
+    maybeAutoStartScanner();
+  } else {
+    stopScanner();
+  }
 }
 
+/* ---------- Search results with multi-select & series grouping ---------- */
 function showSearchResults(items) {
+  state.selectedSearch.clear();
+  state.searchGroups = groupSeries(items);
+  renderSearchResults();
+  updateMultiAddBar();
+}
+
+function renderSearchResults() {
   const box = $("#search-results");
-  if (!items.length) {
-    box.innerHTML = `<p class="hint">找不到結果。可以試試別的關鍵字，或直接手動填寫。</p>`;
+  if (!state.searchGroups.length) {
+    box.innerHTML = `<p class="hint">找不到結果。可以試試別的關鍵字。</p>`;
     return;
   }
-  box.innerHTML = items.map((b, i) => `
-    <div class="result-item" data-idx="${i}">
-      ${coverHtml(b.cover)}
+  box.innerHTML = state.searchGroups.map((g, gi) => {
+    if (g.volumes.length === 1) {
+      return singleResultHtml(g.volumes[0], gi);
+    }
+    return seriesGroupHtml(g, gi);
+  }).join("");
+  wireSearchEvents();
+}
+
+function singleResultHtml(book, gi) {
+  const k = bookKey(book);
+  return `
+    <div class="result-item single" data-gi="${gi}" data-key="${escapeHtml(k)}">
+      <input type="checkbox" class="result-check" aria-label="選取" />
+      ${coverHtml(book.cover)}
       <div class="meta">
-        <strong>${escapeHtml(b.title)}</strong>
-        <small>${escapeHtml(b.author || "")}${b.publishedDate ? " · " + escapeHtml(b.publishedDate) : ""}</small>
-        ${b.isbn ? `<small>ISBN ${escapeHtml(b.isbn)}</small>` : ""}
+        <strong>${escapeHtml(book.title)}</strong>
+        <small>${escapeHtml(book.author || "")}${book.publishedDate ? " · " + escapeHtml(book.publishedDate) : ""}</small>
+        ${book.isbn ? `<small>ISBN ${escapeHtml(book.isbn)}</small>` : ""}
       </div>
     </div>
-  `).join("");
-  box.querySelectorAll(".result-item").forEach((el) => {
-    el.addEventListener("click", () => openConfirm(items[+el.dataset.idx]));
+  `;
+}
+
+function seriesGroupHtml(group, gi) {
+  const cover = group.volumes[0].cover;
+  const volsHtml = group.volumes.map((v, vi) => {
+    const label = v.title.startsWith(group.baseTitle)
+      ? (v.title.slice(group.baseTitle.length).trim() || v.title)
+      : v.title;
+    const k = bookKey(v);
+    return `
+      <div class="vol-item" data-gi="${gi}" data-vi="${vi}" data-key="${escapeHtml(k)}">
+        <input type="checkbox" class="vol-check" aria-label="選取" />
+        ${coverHtml(v.cover)}
+        <div class="meta">
+          <strong>${escapeHtml(label)}</strong>
+          ${v.isbn ? `<small>ISBN ${escapeHtml(v.isbn)}</small>` : ""}
+        </div>
+      </div>
+    `;
+  }).join("");
+  return `
+    <div class="series-group" data-gi="${gi}">
+      <div class="series-header">
+        <input type="checkbox" class="series-check" aria-label="選取整個系列" />
+        ${coverHtml(cover)}
+        <div class="meta">
+          <strong>${escapeHtml(group.baseTitle)}</strong>
+          <small>${escapeHtml(group.author || "")} · 共 ${group.volumes.length} 集</small>
+        </div>
+        <button class="caret" type="button" aria-label="展開">▼</button>
+      </div>
+      <div class="series-volumes hidden">${volsHtml}</div>
+    </div>
+  `;
+}
+
+function wireSearchEvents() {
+  const box = $("#search-results");
+
+  // Single-result rows: toggle on row click or checkbox
+  box.querySelectorAll(".result-item.single").forEach((row) => {
+    const gi = +row.dataset.gi;
+    const book = state.searchGroups[gi].volumes[0];
+    const key = row.dataset.key;
+    const cb = row.querySelector(".result-check");
+    cb.addEventListener("change", () => toggleSelect(key, book, cb.checked));
+    row.addEventListener("click", (e) => {
+      if (e.target === cb) return;
+      cb.checked = !cb.checked;
+      toggleSelect(key, book, cb.checked);
+    });
+  });
+
+  // Series groups
+  box.querySelectorAll(".series-group").forEach((groupEl) => {
+    const gi = +groupEl.dataset.gi;
+    const group = state.searchGroups[gi];
+    const header = groupEl.querySelector(".series-header");
+    const caret = groupEl.querySelector(".caret");
+    const volsBox = groupEl.querySelector(".series-volumes");
+    const seriesCheck = groupEl.querySelector(".series-check");
+
+    // Expand/collapse on header click (but not on checkbox)
+    header.addEventListener("click", (e) => {
+      if (e.target === seriesCheck) return;
+      const open = volsBox.classList.toggle("hidden") === false;
+      caret.textContent = open ? "▲" : "▼";
+    });
+
+    // Series checkbox toggles all volumes
+    seriesCheck.addEventListener("click", (e) => e.stopPropagation());
+    seriesCheck.addEventListener("change", () => {
+      const checked = seriesCheck.checked;
+      group.volumes.forEach((v) => {
+        const k = bookKey(v);
+        if (checked) state.selectedSearch.set(k, v);
+        else state.selectedSearch.delete(k);
+      });
+      groupEl.querySelectorAll(".vol-check").forEach((c) => (c.checked = checked));
+      seriesCheck.indeterminate = false;
+      updateMultiAddBar();
+    });
+
+    // Individual volume rows
+    groupEl.querySelectorAll(".vol-item").forEach((row) => {
+      const vi = +row.dataset.vi;
+      const v = group.volumes[vi];
+      const key = row.dataset.key;
+      const cb = row.querySelector(".vol-check");
+      cb.addEventListener("change", () => {
+        toggleSelect(key, v, cb.checked);
+        syncSeriesCheck(group, groupEl);
+      });
+      row.addEventListener("click", (e) => {
+        if (e.target === cb) return;
+        cb.checked = !cb.checked;
+        toggleSelect(key, v, cb.checked);
+        syncSeriesCheck(group, groupEl);
+      });
+    });
   });
 }
 
+function toggleSelect(key, book, checked) {
+  if (checked) state.selectedSearch.set(key, book);
+  else state.selectedSearch.delete(key);
+  updateMultiAddBar();
+}
+
+function syncSeriesCheck(group, groupEl) {
+  const all = group.volumes.every((v) => state.selectedSearch.has(bookKey(v)));
+  const some = group.volumes.some((v) => state.selectedSearch.has(bookKey(v)));
+  const sc = groupEl.querySelector(".series-check");
+  sc.checked = all;
+  sc.indeterminate = !all && some;
+}
+
+function updateMultiAddBar() {
+  const bar = $("#multi-add-bar");
+  if (!bar) return;
+  const n = state.selectedSearch.size;
+  if (n === 0) {
+    bar.classList.add("hidden");
+  } else {
+    bar.classList.remove("hidden");
+    $("#multi-add-count").textContent = n;
+  }
+}
+
+/* ---------- Confirm (single book from scan / manual ISBN) ---------- */
 function openConfirm(book) {
   state.pendingBook = book;
   const cover = $("#confirm-cover");
@@ -311,6 +504,7 @@ function openConfirm(book) {
   $("#confirm-isbn").textContent = book.isbn ? `ISBN ${book.isbn}` : "";
   $("#confirm-status").value = "unread";
   $("#confirm-type").value = "physical";
+  $("#confirm-source").value = "owned";
   $("#confirm-note").value = "";
   renderTagPicker("#confirm-tag-picker", []);
   $("#confirm-dialog").showModal();
@@ -329,6 +523,7 @@ function commitNewBook() {
     publishedDate: b.publishedDate,
     status: $("#confirm-status").value,
     type: $("#confirm-type").value,
+    source: $("#confirm-source").value,
     note: $("#confirm-note").value.trim(),
     tags: getSelectedTags("#confirm-tag-picker"),
     addedAt: Date.now()
@@ -338,6 +533,65 @@ function commitNewBook() {
   $("#confirm-dialog").close();
   closeAddDialog();
   render();
+}
+
+/* ---------- Multi-confirm (batch from search) ---------- */
+function openMultiConfirm() {
+  const n = state.selectedSearch.size;
+  if (n === 0) return;
+  $("#multi-confirm-title").textContent = `加入 ${n} 本書`;
+  $("#multi-confirm-status").value = "unread";
+  $("#multi-confirm-type").value = "physical";
+  $("#multi-confirm-source").value = "owned";
+  renderTagPicker("#multi-confirm-tag-picker", []);
+  // Preview thumbnails
+  const preview = $("#multi-confirm-list");
+  preview.innerHTML = [...state.selectedSearch.values()].map((b) => `
+    <div class="multi-preview-item">
+      ${coverHtml(b.cover)}
+      <span>${escapeHtml(b.title)}</span>
+    </div>
+  `).join("");
+  $("#multi-confirm-dialog").showModal();
+}
+
+function commitMultiBooks() {
+  const status = $("#multi-confirm-status").value;
+  const type = $("#multi-confirm-type").value;
+  const source = $("#multi-confirm-source").value;
+  const tags = getSelectedTags("#multi-confirm-tag-picker");
+
+  const existing = new Set(state.books.map((b) => b.isbn).filter(Boolean));
+  const total = state.selectedSearch.size;
+  let added = 0;
+  for (const book of state.selectedSearch.values()) {
+    if (book.isbn && existing.has(book.isbn)) continue;
+    state.books.push({
+      id: uid(),
+      title: book.title,
+      author: book.author,
+      isbn: book.isbn,
+      cover: book.cover,
+      publisher: book.publisher,
+      publishedDate: book.publishedDate,
+      status,
+      type,
+      source,
+      note: "",
+      tags: [...tags],
+      addedAt: Date.now()
+    });
+    if (book.isbn) existing.add(book.isbn);
+    added++;
+  }
+  saveBooks();
+  state.selectedSearch.clear();
+  $("#multi-confirm-dialog").close();
+  closeAddDialog();
+  render();
+  if (added < total) {
+    setTimeout(() => alert(`已加入 ${added} 本（${total - added} 本因 ISBN 重複略過）`), 100);
+  }
 }
 
 /* ---------- Edit ---------- */
@@ -354,6 +608,7 @@ function openEdit(id) {
   $("#edit-isbn").value = b.isbn || "";
   $("#edit-status").value = b.status;
   $("#edit-type").value = b.type;
+  $("#edit-source").value = b.source || "owned";
   $("#edit-note").value = b.note || "";
   renderTagPicker("#edit-tag-picker", b.tags || []);
   $("#edit-dialog").showModal();
@@ -367,6 +622,7 @@ function commitEdit() {
   b.isbn = $("#edit-isbn").value.trim();
   b.status = $("#edit-status").value;
   b.type = $("#edit-type").value;
+  b.source = $("#edit-source").value;
   b.note = $("#edit-note").value.trim();
   b.tags = getSelectedTags("#edit-tag-picker");
   saveBooks();
@@ -392,37 +648,37 @@ function openTagManager() {
 function renderTagManager() {
   const box = $("#tag-list");
   if (state.tags.length === 0) {
-    box.innerHTML = `<p class="hint">還沒有任何標籤。在新增/編輯書籍時會出現「＋ 新增標籤」按鈕。</p>`;
-    return;
-  }
-  const counts = {};
-  state.books.forEach((b) => (b.tags || []).forEach((t) => counts[t] = (counts[t] || 0) + 1));
-  box.innerHTML = state.tags.map((t) => `
-    <div class="tag-row" data-tag="${escapeHtml(t)}">
-      <span class="name">${escapeHtml(t)}</span>
-      <span class="count">${counts[t] || 0} 本</span>
-      <div class="actions">
-        <button class="rename" type="button">改名</button>
-        <button class="remove danger" type="button">刪除</button>
+    box.innerHTML = `<p class="hint">還沒有任何標籤。可在新增/編輯書籍時點「＋ 新增標籤」建立。</p>`;
+  } else {
+    const counts = {};
+    state.books.forEach((b) => (b.tags || []).forEach((t) => counts[t] = (counts[t] || 0) + 1));
+    box.innerHTML = state.tags.map((t) => `
+      <div class="tag-row" data-tag="${escapeHtml(t)}">
+        <span class="name">${escapeHtml(t)}</span>
+        <span class="count">${counts[t] || 0} 本</span>
+        <div class="actions">
+          <button class="rename" type="button">改名</button>
+          <button class="remove danger" type="button">刪除</button>
+        </div>
       </div>
-    </div>
-  `).join("");
-  box.querySelectorAll(".tag-row").forEach((row) => {
-    const name = row.dataset.tag;
-    row.querySelector(".rename").addEventListener("click", () => {
-      const next = (prompt(`將「${name}」改名為：`, name) || "").trim();
-      if (!next || next === name) return;
-      renameTag(name, next);
-      renderTagManager();
-      render();
+    `).join("");
+    box.querySelectorAll(".tag-row").forEach((row) => {
+      const name = row.dataset.tag;
+      row.querySelector(".rename").addEventListener("click", () => {
+        const next = (prompt(`將「${name}」改名為：`, name) || "").trim();
+        if (!next || next === name) return;
+        renameTag(name, next);
+        renderTagManager();
+        render();
+      });
+      row.querySelector(".remove").addEventListener("click", () => {
+        if (!confirm(`確定刪除標籤「${name}」？\n所有書本上的此標籤會被移除（書本本身不會被刪除）。`)) return;
+        deleteTag(name);
+        renderTagManager();
+        render();
+      });
     });
-    row.querySelector(".remove").addEventListener("click", () => {
-      if (!confirm(`確定刪除標籤「${name}」？\n所有書本上的此標籤會被移除（書本本身不會被刪除）。`)) return;
-      deleteTag(name);
-      renderTagManager();
-      render();
-    });
-  });
+  }
   const addBtn = $("#tag-manager-add");
   if (addBtn) {
     addBtn.onclick = () => {
@@ -440,11 +696,8 @@ function renderTagManager() {
 function renameTag(oldName, newName) {
   const idx = state.tags.indexOf(oldName);
   if (idx < 0) return;
-  if (state.tags.includes(newName)) {
-    state.tags.splice(idx, 1);
-  } else {
-    state.tags[idx] = newName;
-  }
+  if (state.tags.includes(newName)) state.tags.splice(idx, 1);
+  else state.tags[idx] = newName;
   state.books.forEach((b) => {
     if (!b.tags) return;
     b.tags = b.tags.map((t) => t === oldName ? newName : t)
@@ -463,7 +716,21 @@ function deleteTag(name) {
 }
 
 /* ---------- Scanner ---------- */
+async function maybeAutoStartScanner() {
+  if (state.scanner.running) return;
+  if (!navigator.permissions || !navigator.permissions.query) return;
+  try {
+    const res = await navigator.permissions.query({ name: "camera" });
+    if (res.state === "granted") {
+      startScanner();
+    }
+  } catch {
+    // Permissions API doesn't support 'camera' on this browser; user must press button
+  }
+}
+
 async function startScanner() {
+  if (state.scanner.running) return;
   const status = $("#scanner-status");
   const video = $("#scanner-video");
 
@@ -533,11 +800,7 @@ async function lookupAndOpenConfirm(isbn) {
     } else {
       openConfirm({
         title: "（未知書名）",
-        author: "",
-        isbn,
-        cover: "",
-        publisher: "",
-        publishedDate: ""
+        author: "", isbn, cover: "", publisher: "", publishedDate: ""
       });
     }
   } catch (err) {
@@ -548,7 +811,7 @@ async function lookupAndOpenConfirm(isbn) {
 /* ---------- Backup / Restore ---------- */
 function exportBackup() {
   const payload = {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     books: state.books,
     tags: state.tags
@@ -566,22 +829,12 @@ function exportBackup() {
 }
 async function importBackup(file) {
   let data;
-  try {
-    data = JSON.parse(await file.text());
-  } catch {
-    alert("無法讀取檔案，看起來不是有效的 JSON 備份。");
-    return;
-  }
+  try { data = JSON.parse(await file.text()); }
+  catch { alert("無法讀取檔案，看起來不是有效的 JSON 備份。"); return; }
   const incoming = Array.isArray(data) ? data : data.books;
-  if (!Array.isArray(incoming)) {
-    alert("檔案格式不正確，找不到書籍資料。");
-    return;
-  }
+  if (!Array.isArray(incoming)) { alert("檔案格式不正確。"); return; }
   const valid = incoming.filter((b) => b && typeof b.title === "string");
-  if (!valid.length) {
-    alert("檔案中沒有任何有效的書籍資料。");
-    return;
-  }
+  if (!valid.length) { alert("檔案中沒有任何有效的書籍資料。"); return; }
   if (Array.isArray(data.tags)) {
     data.tags.forEach((t) => {
       if (typeof t === "string" && t && !state.tags.includes(t)) state.tags.push(t);
@@ -596,6 +849,7 @@ async function importBackup(file) {
     seen.add(k);
     const tags = Array.isArray(b.tags) ? b.tags.filter((t) => typeof t === "string") : [];
     tags.forEach((t) => { if (!state.tags.includes(t)) state.tags.push(t); });
+    const validSource = ["owned", "library", "borrowed"];
     state.books.push({
       id: b.id || uid(),
       title: b.title,
@@ -606,6 +860,7 @@ async function importBackup(file) {
       publishedDate: b.publishedDate || "",
       status: b.status === "read" ? "read" : "unread",
       type: b.type === "ebook" ? "ebook" : "physical",
+      source: validSource.includes(b.source) ? b.source : "owned",
       note: b.note || "",
       tags,
       addedAt: typeof b.addedAt === "number" ? b.addedAt : Date.now()
@@ -621,28 +876,18 @@ async function importBackup(file) {
 
 /* ---------- Wire up ---------- */
 function wireEvents() {
-  $("#filter-status").addEventListener("change", (e) => {
-    state.filter.status = e.target.value; render();
-  });
-  $("#filter-type").addEventListener("change", (e) => {
-    state.filter.type = e.target.value; render();
-  });
-  $("#filter-tag").addEventListener("change", (e) => {
-    state.filter.tag = e.target.value; render();
-  });
-  $("#filter-search").addEventListener("input", (e) => {
-    state.filter.search = e.target.value; render();
-  });
+  $("#filter-status").addEventListener("change", (e) => { state.filter.status = e.target.value; render(); });
+  $("#filter-type").addEventListener("change", (e) => { state.filter.type = e.target.value; render(); });
+  $("#filter-source").addEventListener("change", (e) => { state.filter.source = e.target.value; render(); });
+  $("#filter-tag").addEventListener("change", (e) => { state.filter.tag = e.target.value; render(); });
+  $("#filter-search").addEventListener("input", (e) => { state.filter.search = e.target.value; render(); });
 
   $("#add-btn").addEventListener("click", openAddDialog);
   $("#close-add").addEventListener("click", closeAddDialog);
-  $("#add-dialog").addEventListener("close", stopScanner);
+  $("#add-dialog").addEventListener("close", () => { stopScanner(); state.selectedSearch.clear(); });
 
   $$(".tab-btn").forEach((b) =>
-    b.addEventListener("click", () => {
-      switchTab(b.dataset.tab);
-      if (b.dataset.tab !== "scan") stopScanner();
-    })
+    b.addEventListener("click", () => switchTab(b.dataset.tab))
   );
 
   $("#scanner-start").addEventListener("click", startScanner);
@@ -662,16 +907,20 @@ function wireEvents() {
     if (e.key === "Enter") { e.preventDefault(); runSearch(); }
   });
 
-  $("#confirm-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    commitNewBook();
+  $("#multi-add-confirm").addEventListener("click", openMultiConfirm);
+  $("#multi-add-clear").addEventListener("click", () => {
+    state.selectedSearch.clear();
+    renderSearchResults();
+    updateMultiAddBar();
   });
+
+  $("#confirm-form").addEventListener("submit", (e) => { e.preventDefault(); commitNewBook(); });
   $("#confirm-cancel").addEventListener("click", () => $("#confirm-dialog").close());
 
-  $("#edit-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    commitEdit();
-  });
+  $("#multi-confirm-form").addEventListener("submit", (e) => { e.preventDefault(); commitMultiBooks(); });
+  $("#multi-confirm-cancel").addEventListener("click", () => $("#multi-confirm-dialog").close());
+
+  $("#edit-form").addEventListener("submit", (e) => { e.preventDefault(); commitEdit(); });
   $("#edit-cancel").addEventListener("click", () => $("#edit-dialog").close());
   $("#edit-delete").addEventListener("click", deleteEditing);
 
@@ -696,6 +945,8 @@ async function runSearch() {
   if (!q) return;
   const box = $("#search-results");
   box.innerHTML = `<p class="hint">查詢中…</p>`;
+  state.selectedSearch.clear();
+  updateMultiAddBar();
   try {
     const items = await googleBooksSearch(q);
     showSearchResults(items);

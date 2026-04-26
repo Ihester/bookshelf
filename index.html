@@ -32,6 +32,12 @@
       <option value="physical">實體書</option>
       <option value="ebook">電子書</option>
     </select>
+    <select id="filter-source" aria-label="來源">
+      <option value="all">全部來源</option>
+      <option value="owned">自有</option>
+      <option value="library">圖書館</option>
+      <option value="borrowed">借閱</option>
+    </select>
     <select id="filter-tag" aria-label="標籤">
       <option value="all">全部標籤</option>
     </select>
@@ -88,6 +94,12 @@
 
       <div id="search-results" class="results"></div>
 
+      <div id="multi-add-bar" class="multi-add-bar hidden">
+        <span><strong id="multi-add-count">0</strong> 本已選</span>
+        <button type="button" id="multi-add-clear" class="ghost">清除</button>
+        <button type="button" id="multi-add-confirm" class="primary">加入</button>
+      </div>
+
       <button class="close-btn" id="close-add">關閉</button>
     </div>
   </dialog>
@@ -120,6 +132,14 @@
         </select>
       </label>
       <label>
+        <span>來源</span>
+        <select id="confirm-source">
+          <option value="owned">自有</option>
+          <option value="library">圖書館</option>
+          <option value="borrowed">借閱</option>
+        </select>
+      </label>
+      <label>
         <span>標籤 / 類別</span>
         <div id="confirm-tag-picker" class="tag-picker"></div>
       </label>
@@ -129,6 +149,46 @@
       </label>
       <div class="dialog-actions">
         <button type="button" id="confirm-cancel" class="ghost">取消</button>
+        <button type="submit" class="primary">加入</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 多選加入對話框 -->
+  <dialog id="multi-confirm-dialog" class="sheet">
+    <form method="dialog" class="sheet-content" id="multi-confirm-form">
+      <div class="sheet-handle"></div>
+      <h2 id="multi-confirm-title">加入書籍</h2>
+      <p class="hint">以下設定會套用到所有選取的書，加入後可以個別點開修改。</p>
+      <div id="multi-confirm-list" class="multi-preview"></div>
+      <label>
+        <span>閱讀狀態</span>
+        <select id="multi-confirm-status">
+          <option value="unread">未讀</option>
+          <option value="read">已讀</option>
+        </select>
+      </label>
+      <label>
+        <span>書籍類型</span>
+        <select id="multi-confirm-type">
+          <option value="physical">實體書</option>
+          <option value="ebook">電子書</option>
+        </select>
+      </label>
+      <label>
+        <span>來源</span>
+        <select id="multi-confirm-source">
+          <option value="owned">自有</option>
+          <option value="library">圖書館</option>
+          <option value="borrowed">借閱</option>
+        </select>
+      </label>
+      <label>
+        <span>標籤 / 類別</span>
+        <div id="multi-confirm-tag-picker" class="tag-picker"></div>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="multi-confirm-cancel" class="ghost">取消</button>
         <button type="submit" class="primary">加入</button>
       </div>
     </form>
@@ -159,6 +219,14 @@
         <select id="edit-type">
           <option value="physical">實體書</option>
           <option value="ebook">電子書</option>
+        </select>
+      </label>
+      <label>
+        <span>來源</span>
+        <select id="edit-source">
+          <option value="owned">自有</option>
+          <option value="library">圖書館</option>
+          <option value="borrowed">借閱</option>
         </select>
       </label>
       <label>
