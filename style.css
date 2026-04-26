@@ -120,12 +120,9 @@ body {
 .book-card:active { transform: scale(0.98); }
 .book-card:hover { border-color: var(--border); }
 
-.book-card img {
+.book-card .cover {
   width: 64px;
   height: 96px;
-  object-fit: cover;
-  border-radius: 6px;
-  background: #ddd;
   flex-shrink: 0;
 }
 .book-card .meta {
@@ -362,13 +359,13 @@ button.danger {
   background: var(--bg);
 }
 .result-item:hover { border-color: var(--border); }
-.result-item img {
+.result-item .cover {
   width: 44px;
   height: 64px;
-  object-fit: cover;
-  border-radius: 4px;
-  background: #ddd;
   flex-shrink: 0;
+}
+.result-item .cover::before {
+  font-size: 1.2rem;
 }
 .result-item .meta {
   flex: 1;
@@ -441,4 +438,119 @@ label textarea {
 .close-btn {
   width: 100%;
   margin-top: 4px;
+}
+
+/* ---------- Cover wrapper with fallback placeholder ---------- */
+.cover {
+  position: relative;
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cover::before {
+  content: "📖";
+  font-size: 1.6rem;
+  opacity: 0.4;
+  position: absolute;
+}
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: relative;
+  z-index: 1;
+  background: var(--bg);
+}
+.cover img[data-failed] { display: none; }
+.confirm-book img[data-failed] { display: none; }
+
+/* ---------- Tag picker chips ---------- */
+.tag-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  min-height: 44px;
+  align-items: center;
+}
+.tag-chip {
+  font-size: 0.85rem;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.2;
+}
+.tag-chip.selected {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.tag-chip.add {
+  border-style: dashed;
+  color: var(--muted);
+  background: transparent;
+}
+
+/* tag badge on book card */
+.badge.tag {
+  background: #f0e6f3;
+  color: #5a3a6b;
+  border-color: #d8c8df;
+}
+
+/* ---------- Tag manager list ---------- */
+.tag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.tag-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 8px;
+}
+.tag-row .name {
+  flex: 1;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.tag-row .count {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.tag-row .actions {
+  display: flex;
+  gap: 4px;
+}
+.tag-row .actions button {
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.tag-row .actions .danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.section-title {
+  font-size: 0.95rem;
+  color: var(--muted);
+  margin: 8px 0 0;
+  font-weight: 500;
 }

@@ -9,6 +9,8 @@
   <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <link rel="apple-touch-icon" href="icon.svg" />
   <link rel="stylesheet" href="style.css" />
+  <!-- 簡體 → 台灣繁體轉換器（用於 Google Books 回傳的書名/作者/譯者/出版社） -->
+  <script defer src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -30,7 +32,10 @@
       <option value="physical">實體書</option>
       <option value="ebook">電子書</option>
     </select>
-    <input type="search" id="filter-search" placeholder="搜尋書名 / 作者" aria-label="搜尋" />
+    <select id="filter-tag" aria-label="標籤">
+      <option value="all">全部標籤</option>
+    </select>
+    <input type="search" id="filter-search" placeholder="搜尋書名 / 作者 / 標籤" aria-label="搜尋" />
   </section>
 
   <main id="book-list" class="book-list"></main>
@@ -93,7 +98,7 @@
       <div class="sheet-handle"></div>
       <h2>加入書櫃</h2>
       <div class="confirm-book">
-        <img id="confirm-cover" alt="" />
+        <img id="confirm-cover" alt="" onerror="this.dataset.failed=1" />
         <div class="confirm-meta">
           <strong id="confirm-title"></strong>
           <span id="confirm-author"></span>
@@ -115,6 +120,10 @@
         </select>
       </label>
       <label>
+        <span>標籤 / 類別</span>
+        <div id="confirm-tag-picker" class="tag-picker"></div>
+      </label>
+      <label>
         <span>備註（選填）</span>
         <textarea id="confirm-note" rows="2"></textarea>
       </label>
@@ -131,7 +140,7 @@
       <div class="sheet-handle"></div>
       <h2>編輯書籍</h2>
       <div class="confirm-book">
-        <img id="edit-cover" alt="" />
+        <img id="edit-cover" alt="" onerror="this.dataset.failed=1" />
         <div class="confirm-meta">
           <input type="text" id="edit-title" placeholder="書名" required />
           <input type="text" id="edit-author" placeholder="作者" />
@@ -153,6 +162,10 @@
         </select>
       </label>
       <label>
+        <span>標籤 / 類別</span>
+        <div id="edit-tag-picker" class="tag-picker"></div>
+      </label>
+      <label>
         <span>備註</span>
         <textarea id="edit-note" rows="3"></textarea>
       </label>
@@ -164,11 +177,13 @@
     </form>
   </dialog>
 
-  <!-- 備份對話框 -->
-  <dialog id="backup-dialog" class="sheet">
+  <!-- 選單（備份 + 標籤管理入口） -->
+  <dialog id="menu-dialog" class="sheet">
     <div class="sheet-content">
       <div class="sheet-handle"></div>
-      <h2>備份與還原</h2>
+      <h2>設定</h2>
+
+      <h3 class="section-title">備份與還原</h3>
       <div class="backup-actions">
         <button id="export-btn" class="primary">📤 匯出備份（下載 JSON）</button>
         <button id="import-btn" class="ghost">📥 匯入備份（合併）</button>
@@ -176,9 +191,24 @@
       </div>
       <p class="hint">
         匯出會把所有書籍存成一個 JSON 檔下載到手機。<br />
-        匯入時會以 ISBN（無 ISBN 則用書名+作者）去重，重複的會自動略過，不會覆蓋現有資料。
+        匯入時會以 ISBN（無則用書名+作者）去重，重複的略過。
       </p>
-      <button id="close-backup" class="close-btn">關閉</button>
+
+      <h3 class="section-title">標籤 / 類別</h3>
+      <button id="manage-tags-btn" class="ghost">🏷️ 管理標籤</button>
+
+      <button id="close-menu" class="close-btn">關閉</button>
+    </div>
+  </dialog>
+
+  <!-- 標籤管理對話框 -->
+  <dialog id="tag-manager-dialog" class="sheet">
+    <div class="sheet-content">
+      <div class="sheet-handle"></div>
+      <h2>管理標籤</h2>
+      <div id="tag-list" class="tag-list"></div>
+      <button id="tag-manager-add" class="primary">＋ 新增標籤</button>
+      <button id="close-tag-manager" class="close-btn">關閉</button>
     </div>
   </dialog>
 
