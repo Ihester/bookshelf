@@ -1,4 +1,4 @@
-const CACHE = "bookshelf-v6";
+const CACHE = "bookshelf-v7";
 const ASSETS = [
   "./",
   "./index.html",

@@ -114,14 +114,59 @@ function coverHtml(src) {
 }
 
 /* ---------- Google Books ---------- */
+async function fetchGoogleBooksPage(q, startIndex = 0, maxResults = 40) {
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=${maxResults}&startIndex=${startIndex}&printType=books`;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return [];
+    const data = await r.json();
+    return data.items || [];
+  } catch {
+    return [];
+  }
+}
+
+function rawItemKey(item) {
+  if (item.id) return `id:${item.id}`;
+  const v = item.volumeInfo || {};
+  const ids = v.industryIdentifiers || [];
+  const isbn = (ids.find((x) => x.type === "ISBN_13") ||
+                ids.find((x) => x.type === "ISBN_10") || {}).identifier;
+  return isbn ? `isbn:${isbn}` : `t:${v.title}|a:${(v.authors || []).join("")}`;
+}
+
 async function googleBooksSearch(query) {
   await ensureOpenCC();
-  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=40&country=TW`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error("查詢失敗");
-  const data = await r.json();
-  return (data.items || []).map(toBookData);
+  const q = (query || "").trim();
+  if (!q) return [];
+
+  const hasOperator = /^(intitle|inauthor|isbn|inpublisher|subject):/i.test(q);
+  const looksLikeIsbn = /^\d{9,13}[Xx\d]?$/.test(q);
+
+  // 直接查詢的情況：已含限定詞 / ISBN 數字 → 單次查詢即可
+  if (hasOperator || looksLikeIsbn) {
+    const items = await fetchGoogleBooksPage(q);
+    return items.map(toBookData);
+  }
+
+  // 一般搜尋：同時打 intitle:Q（書名精準）和 Q（廣泛比對），合併去重
+  const [titleItems, generalItems] = await Promise.all([
+    fetchGoogleBooksPage(`intitle:${q}`, 0, 40),
+    fetchGoogleBooksPage(q, 0, 40)
+  ]);
+
+  const seen = new Set();
+  const merged = [];
+  // intitle 結果優先（標題精準匹配 → 相關性較高）
+  for (const it of [...titleItems, ...generalItems]) {
+    const k = rawItemKey(it);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    merged.push(it);
+  }
+  return merged.map(toBookData);
 }
+
 async function googleBooksByIsbn(isbn) {
   const items = await googleBooksSearch(`isbn:${isbn}`);
   if (items.length) return items;
