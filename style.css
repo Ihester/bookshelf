@@ -246,6 +246,7 @@ body {
 .badge.unread  { background: #fff1d6; color: #7a5414; border-color: #f0d9a3; }
 .badge.ebook   { background: #e0e7f3; color: #2b3f6b; border-color: #c2cfe6; }
 .badge.physical{ background: #f0e0d4; color: #6b4626; border-color: #d8c3b1; }
+.badge.both    { background: #e0e3d4; color: #4a5a26; border-color: #c5cfa3; }
 
 .empty-hint {
   text-align: center;

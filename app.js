@@ -224,7 +224,11 @@ function bookKey(b) {
 
 /* ---------- Render ---------- */
 function statusLabel(s) { return s === "read" ? "已讀" : "未讀"; }
-function typeLabel(t) { return t === "ebook" ? "電子書" : "實體書"; }
+function typeLabel(t) {
+  if (t === "ebook") return "電子書";
+  if (t === "both") return "兩者皆有";
+  return "實體書";
+}
 function sourceLabel(s) {
   if (s === "library") return "圖書館";
   if (s === "borrowed") return "借閱";
@@ -333,7 +337,14 @@ function applyFilters(books) {
   const q = search.trim().toLowerCase();
   return books.filter((b) => {
     if (status !== "all" && b.status !== status) return false;
-    if (type !== "all" && b.type !== type) return false;
+    if (type !== "all") {
+      // 「實體書」「電子書」篩選時，把「兩者皆有」也納入
+      if (type === "physical" || type === "ebook") {
+        if (b.type !== type && b.type !== "both") return false;
+      } else if (b.type !== type) {
+        return false;
+      }
+    }
     if (source !== "all") {
       const s = b.source || "owned";
       if (s !== source) return false;
@@ -1016,7 +1027,7 @@ async function importBackup(file) {
       publisher: b.publisher || "",
       publishedDate: b.publishedDate || "",
       status: b.status === "read" ? "read" : "unread",
-      type: b.type === "ebook" ? "ebook" : "physical",
+      type: ["ebook", "both"].includes(b.type) ? b.type : "physical",
       source: validSource.includes(b.source) ? b.source : "owned",
       note: b.note || "",
       tags,
