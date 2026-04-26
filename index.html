@@ -13,7 +13,10 @@
 <body>
   <header class="topbar">
     <h1>📚 我的書櫃</h1>
-    <div class="stats" id="stats">— —</div>
+    <div class="topbar-right">
+      <span class="stats" id="stats">— —</span>
+      <button id="menu-btn" class="icon-btn" aria-label="選單">⋮</button>
+    </div>
   </header>
 
   <section class="filters">
@@ -159,6 +162,24 @@
         <button type="submit" class="primary">儲存</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- 備份對話框 -->
+  <dialog id="backup-dialog" class="sheet">
+    <div class="sheet-content">
+      <div class="sheet-handle"></div>
+      <h2>備份與還原</h2>
+      <div class="backup-actions">
+        <button id="export-btn" class="primary">📤 匯出備份（下載 JSON）</button>
+        <button id="import-btn" class="ghost">📥 匯入備份（合併）</button>
+        <input type="file" id="import-file" accept="application/json,.json" hidden />
+      </div>
+      <p class="hint">
+        匯出會把所有書籍存成一個 JSON 檔下載到手機。<br />
+        匯入時會以 ISBN（無 ISBN 則用書名+作者）去重，重複的會自動略過，不會覆蓋現有資料。
+      </p>
+      <button id="close-backup" class="close-btn">關閉</button>
+    </div>
   </dialog>
 
   <script src="app.js"></script>

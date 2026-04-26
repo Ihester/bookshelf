@@ -48,10 +48,35 @@ body {
   margin: 0;
   font-weight: 600;
 }
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .stats {
   font-size: 0.85rem;
   opacity: 0.85;
 }
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 1.4rem;
+  line-height: 1;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+}
+.icon-btn:active { background: rgba(255, 255, 255, 0.15); }
+
+.backup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.backup-actions button { width: 100%; }
 
 /* Filters */
 .filters {

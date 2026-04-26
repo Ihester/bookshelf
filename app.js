@@ -342,6 +342,76 @@ async function lookupAndOpenConfirm(isbn) {
   }
 }
 
+/* ---------- Backup / Restore ---------- */
+function exportBackup() {
+  const payload = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    books: state.books
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json"
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const date = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `bookshelf-backup-${date}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function importBackup(file) {
+  let data;
+  try {
+    const text = await file.text();
+    data = JSON.parse(text);
+  } catch {
+    alert("無法讀取檔案，看起來不是有效的 JSON 備份。");
+    return;
+  }
+  const incoming = Array.isArray(data) ? data : data.books;
+  if (!Array.isArray(incoming)) {
+    alert("檔案格式不正確，找不到書籍資料。");
+    return;
+  }
+  const valid = incoming.filter((b) => b && typeof b.title === "string");
+  if (!valid.length) {
+    alert("檔案中沒有任何有效的書籍資料。");
+    return;
+  }
+
+  const keyOf = (b) =>
+    b.isbn ? `isbn:${b.isbn}` : `t:${b.title}|a:${b.author || ""}`;
+  const seen = new Set(state.books.map(keyOf));
+  let added = 0;
+  for (const b of valid) {
+    const k = keyOf(b);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    state.books.push({
+      id: b.id || uid(),
+      title: b.title,
+      author: b.author || "",
+      isbn: b.isbn || "",
+      cover: b.cover || "",
+      publisher: b.publisher || "",
+      publishedDate: b.publishedDate || "",
+      status: b.status === "read" ? "read" : "unread",
+      type: b.type === "ebook" ? "ebook" : "physical",
+      note: b.note || "",
+      addedAt: typeof b.addedAt === "number" ? b.addedAt : Date.now()
+    });
+    added++;
+  }
+  saveBooks();
+  render();
+  $("#backup-dialog").close();
+  alert(`已匯入 ${added} 本新書（略過 ${valid.length - added} 本重複）。`);
+}
+
 /* ---------- Wire up ---------- */
 function wireEvents() {
   $("#filter-status").addEventListener("change", (e) => {
@@ -397,6 +467,16 @@ function wireEvents() {
   });
   $("#edit-cancel").addEventListener("click", () => $("#edit-dialog").close());
   $("#edit-delete").addEventListener("click", deleteEditing);
+
+  $("#menu-btn").addEventListener("click", () => $("#backup-dialog").showModal());
+  $("#close-backup").addEventListener("click", () => $("#backup-dialog").close());
+  $("#export-btn").addEventListener("click", exportBackup);
+  $("#import-btn").addEventListener("click", () => $("#import-file").click());
+  $("#import-file").addEventListener("change", (e) => {
+    const f = e.target.files?.[0];
+    if (f) importBackup(f);
+    e.target.value = "";
+  });
 }
 
 async function runSearch() {
