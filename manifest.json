@@ -1,0 +1,20 @@
+{
+  "name": "我的書櫃",
+  "short_name": "書櫃",
+  "description": "登錄並追蹤你買過、讀過的書籍",
+  "lang": "zh-Hant",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f3ec",
+  "theme_color": "#3b5d50",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

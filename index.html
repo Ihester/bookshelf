@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#3b5d50" />
+  <title>我的書櫃</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>📚 我的書櫃</h1>
+    <div class="stats" id="stats">— —</div>
+  </header>
+
+  <section class="filters">
+    <select id="filter-status" aria-label="閱讀狀態">
+      <option value="all">全部狀態</option>
+      <option value="read">已讀</option>
+      <option value="unread">未讀</option>
+    </select>
+    <select id="filter-type" aria-label="書籍類型">
+      <option value="all">全部類型</option>
+      <option value="physical">實體書</option>
+      <option value="ebook">電子書</option>
+    </select>
+    <input type="search" id="filter-search" placeholder="搜尋書名 / 作者" aria-label="搜尋" />
+  </section>
+
+  <main id="book-list" class="book-list"></main>
+
+  <p id="empty-hint" class="empty-hint hidden">
+    還沒有任何書籍。點右下角的 <strong>＋</strong> 開始登錄第一本書！
+  </p>
+
+  <button id="add-btn" class="fab" aria-label="新增書籍">＋</button>
+
+  <!-- 新增書籍對話框 -->
+  <dialog id="add-dialog" class="sheet">
+    <div class="sheet-content">
+      <div class="sheet-handle"></div>
+      <h2>新增書籍</h2>
+
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="scan">📷 掃描條碼</button>
+        <button class="tab-btn" data-tab="search">🔍 搜尋</button>
+      </div>
+
+      <!-- 掃描分頁 -->
+      <div class="tab-panel" data-panel="scan">
+        <div class="scanner-wrap">
+          <video id="scanner-video" playsinline muted></video>
+          <div class="scanner-overlay"></div>
+        </div>
+        <p class="scanner-status" id="scanner-status">點下方按鈕開始掃描</p>
+        <div class="row">
+          <button id="scanner-start" class="primary">啟動相機</button>
+          <button id="scanner-stop" class="ghost hidden">停止</button>
+        </div>
+        <details class="manual-isbn">
+          <summary>無法掃描？手動輸入 ISBN</summary>
+          <div class="row">
+            <input type="text" id="manual-isbn" placeholder="例：9789861342962" inputmode="numeric" />
+            <button id="manual-isbn-btn">查詢</button>
+          </div>
+        </details>
+      </div>
+
+      <!-- 搜尋分頁 -->
+      <div class="tab-panel hidden" data-panel="search">
+        <div class="row">
+          <input type="text" id="search-input" placeholder="輸入書名、作者或 ISBN" />
+          <button id="search-btn" class="primary">搜尋</button>
+        </div>
+        <p class="hint">透過 Google Books 查詢，需要網路連線</p>
+      </div>
+
+      <div id="search-results" class="results"></div>
+
+      <button class="close-btn" id="close-add">關閉</button>
+    </div>
+  </dialog>
+
+  <!-- 確認加入對話框 -->
+  <dialog id="confirm-dialog" class="sheet">
+    <form method="dialog" class="sheet-content" id="confirm-form">
+      <div class="sheet-handle"></div>
+      <h2>加入書櫃</h2>
+      <div class="confirm-book">
+        <img id="confirm-cover" alt="" />
+        <div class="confirm-meta">
+          <strong id="confirm-title"></strong>
+          <span id="confirm-author"></span>
+          <small id="confirm-isbn"></small>
+        </div>
+      </div>
+      <label>
+        <span>閱讀狀態</span>
+        <select id="confirm-status">
+          <option value="unread">未讀</option>
+          <option value="read">已讀</option>
+        </select>
+      </label>
+      <label>
+        <span>書籍類型</span>
+        <select id="confirm-type">
+          <option value="physical">實體書</option>
+          <option value="ebook">電子書</option>
+        </select>
+      </label>
+      <label>
+        <span>備註（選填）</span>
+        <textarea id="confirm-note" rows="2"></textarea>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="confirm-cancel" class="ghost">取消</button>
+        <button type="submit" class="primary">加入</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 編輯對話框 -->
+  <dialog id="edit-dialog" class="sheet">
+    <form method="dialog" class="sheet-content" id="edit-form">
+      <div class="sheet-handle"></div>
+      <h2>編輯書籍</h2>
+      <div class="confirm-book">
+        <img id="edit-cover" alt="" />
+        <div class="confirm-meta">
+          <input type="text" id="edit-title" placeholder="書名" required />
+          <input type="text" id="edit-author" placeholder="作者" />
+          <input type="text" id="edit-isbn" placeholder="ISBN" />
+        </div>
+      </div>
+      <label>
+        <span>閱讀狀態</span>
+        <select id="edit-status">
+          <option value="unread">未讀</option>
+          <option value="read">已讀</option>
+        </select>
+      </label>
+      <label>
+        <span>書籍類型</span>
+        <select id="edit-type">
+          <option value="physical">實體書</option>
+          <option value="ebook">電子書</option>
+        </select>
+      </label>
+      <label>
+        <span>備註</span>
+        <textarea id="edit-note" rows="3"></textarea>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="edit-delete" class="danger">刪除</button>
+        <button type="button" id="edit-cancel" class="ghost">取消</button>
+        <button type="submit" class="primary">儲存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

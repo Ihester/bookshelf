@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#3b5d50"/>
+  <g transform="translate(96 112)">
+    <rect x="0"   y="0"  width="80"  height="288" rx="6" fill="#c98a5b"/>
+    <rect x="92"  y="16" width="76"  height="272" rx="6" fill="#f7f3ec"/>
+    <rect x="184" y="0"  width="68"  height="288" rx="6" fill="#8aa896"/>
+    <rect x="268" y="32" width="56"  height="256" rx="6" fill="#d8b27a"/>
+    <rect x="0"   y="280" width="324" height="20" rx="4" fill="#2c463c"/>
+    <text x="130" y="170" font-family="serif" font-size="92" font-weight="700"
+          fill="#3b5d50" text-anchor="middle">書</text>
+  </g>
+</svg>
